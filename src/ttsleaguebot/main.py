@@ -50,8 +50,13 @@ def get_next_increment_value():
         .execute()
     )
     values = result.get("values", [])
-    return len(values) + 1
+    return len(values)
 
+def get_unique_discord_identifier(member: discord.Member):
+    if not member.name:
+        return member.id
+    
+    return member.name
 
 class TTSLeagueClient(discord.Client):
     def __init__(self) -> None:
@@ -82,13 +87,13 @@ class ReportLeagueResult(discord.ui.Modal, title="Report League Result"):
             "values": [
                 [
                     get_next_increment_value(),
-                    self.players[0].id,
-                    self.players[1].id,
-                    self.players[2].id,
-                    self.players[3].id,
+                    get_unique_discord_identifier(self.players[0]),
+                    get_unique_discord_identifier(self.players[1]),
+                    get_unique_discord_identifier(self.players[2]),
+                    get_unique_discord_identifier(self.players[3]),
                     *full_commander_names,
-                    self.winner.id,
-                    int(time.time()),
+                    get_unique_discord_identifier(self.winner),
+                    f"=EPOCHTODATE({int(time.time())})",
                     "Empty",
                 ]
             ]
@@ -100,7 +105,7 @@ class ReportLeagueResult(discord.ui.Modal, title="Report League Result"):
             .append(
                 spreadsheetId=SPREADSHEET_ID,
                 range=RANGE_NAME,
-                valueInputOption="RAW",
+                valueInputOption="USER_ENTERED",
                 insertDataOption="INSERT_ROWS",
                 body=body,
             )
