@@ -145,8 +145,8 @@ async def report(
     for player in modal.players:
         modal.add_item(
             discord.ui.TextInput(
-                label=f"{player.nick}'s Commander(s)",
-                placeholder=f"Type {player.nick}'s commander(s) here...",
+                label=f"{player.nick if player.nick else player.global_name}'s Commander(s)",
+                placeholder=f"Type {player.nick if player.nick else player.global_name}'s commander(s) here...",
             )
         )
 
