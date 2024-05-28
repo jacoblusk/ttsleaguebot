@@ -15,7 +15,7 @@ You will also need a Discord Bot token inside a file named `bot_token`, which wi
 
 ## Troubleshooting
 
-If you don't have `ttsleaguebot` in your accessible in your path, ensure you have your `Scripts`, which is found in your Python installation folder, in your path.
+If you don't have `ttsleaguebot` in your path, ensure you have your `Scripts`, which is found in your Python installation folder, in your path.
 Run the following to find your Python installation folder.
 ```py
 import sys
