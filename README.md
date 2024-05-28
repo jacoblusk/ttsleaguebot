@@ -9,7 +9,7 @@ After installation, you'll have access to the following programs,
 - `ttsleaguebot`
 
 You must ensure you have your service account's credentials in `credentials.json`, placed in the directory you invoke the bot.
-Learn more about creating a Google service account [here]([here](https://cloud.google.com/iam/docs/service-accounts-create)).
+Learn more about creating a Google service account [here](https://cloud.google.com/iam/docs/service-accounts-create).
 
 You will also need a Discord Bot token inside a file named `bot_token`, which will be placed in the same directory you invoke the bot.
 
