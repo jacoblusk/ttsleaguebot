@@ -1,8 +1,9 @@
 import discord
 import json
-import os.path
+import aiohttp
 import traceback
 import time
+import urllib
 
 from discord import app_commands
 
@@ -12,20 +13,40 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SAMPLE_SPREADSHEET_ID = "1yk-mlnwK9jMQW8feQH-CtoBEMqURmuCwnEIw_pVHtEU"
-SAMPLE_RANGE_NAME = "A1:L"
+SPREADSHEET_ID = "1yk-mlnwK9jMQW8feQH-CtoBEMqURmuCwnEIw_pVHtEU"
+RANGE_NAME = "A1:L"
+SCRYFALL_SEARCH_URL = "https://api.scryfall.com/cards/search"
+
 
 creds = service_account.Credentials.from_service_account_file(
     "credentials.json", scopes=SCOPES
 )
 service = build("sheets", "v4", credentials=creds)
 
+async def scryfall_commander_lookup(cardname: str):
+    params = {
+        'q': f"{cardname} is:commander",
+        'order': 'edhrec'
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(SCRYFALL_SEARCH_URL, params=params) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data['object'] == 'list' and data['total_cards'] > 0:
+                    return data['data'][0]["name"]
+                else:
+                    return "No cards found."
+            else:
+                return f"Error: {response.status}"
+
+    print(results)
 
 def get_next_increment_value():
     result = (
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME)
+        .get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME)
         .execute()
     )
     values = result.get("values", [])
@@ -46,11 +67,17 @@ class TTSLeagueClient(discord.Client):
 
 class ReportLeagueResult(discord.ui.Modal, title="Report League Result"):
     async def on_submit(self, interaction: discord.Interaction):
-        decklist_values = [child.value for child in self._children]
-        print(decklist_values)
+        commanders = [child.value for child in self._children]
 
-        sheet = service.spreadsheets()
+        full_commander_names = []
+        for commander in commanders:
+            if "," in commander:
+                parnters = [await scryfall_commander_lookup(partner.strip()) for partner in commander.split(",")]
+                full_commander_names.append("/".join(parnters))
+            else:
+                full_commander_names.append(await scryfall_commander_lookup(commander))
 
+        
         body = {
             "values": [
                 [
@@ -59,10 +86,7 @@ class ReportLeagueResult(discord.ui.Modal, title="Report League Result"):
                     self.players[1].id,
                     self.players[2].id,
                     self.players[3].id,
-                    "test",
-                    "test",
-                    "test",
-                    "test",
+                    *full_commander_names,
                     self.winner.id,
                     int(time.time()),
                     "Empty",
@@ -74,8 +98,8 @@ class ReportLeagueResult(discord.ui.Modal, title="Report League Result"):
             service.spreadsheets()
             .values()
             .append(
-                spreadsheetId=SAMPLE_SPREADSHEET_ID,
-                range=SAMPLE_RANGE_NAME,
+                spreadsheetId=SPREADSHEET_ID,
+                range=RANGE_NAME,
                 valueInputOption="RAW",
                 insertDataOption="INSERT_ROWS",
                 body=body,
@@ -84,7 +108,7 @@ class ReportLeagueResult(discord.ui.Modal, title="Report League Result"):
         )
 
         await interaction.response.send_message(
-            f"Thanks for your feedback!", ephemeral=True
+            f"League report successful!", ephemeral=True
         )
 
     async def on_error(
