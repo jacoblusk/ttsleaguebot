@@ -1,11 +1,10 @@
 import discord
-import json
 import aiohttp
 import traceback
 import time
-import urllib
 
 from discord import app_commands
+from typing import Optional
 
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
@@ -14,20 +13,25 @@ from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SPREADSHEET_ID = "1yk-mlnwK9jMQW8feQH-CtoBEMqURmuCwnEIw_pVHtEU"
-RANGE_NAME = "A1:L"
+RANGE_NAME = "Month 6-7 2024!A1:L"
 SCRYFALL_SEARCH_URL = "https://api.scryfall.com/cards/search"
 
+class CommanderNotFound(Exception):
+    pass
 
 creds = service_account.Credentials.from_service_account_file(
     "credentials.json", scopes=SCOPES
 )
 service = build("sheets", "v4", credentials=creds)
 
-async def scryfall_commander_lookup(cardname: str):
+async def scryfall_commander_lookup(cardname: str, is_partner=False):
     params = {
         'q': f"{cardname} is:commander",
         'order': 'edhrec'
     }
+
+    if is_partner:
+        params['q'] += ' is:partner'
 
     async with aiohttp.ClientSession() as session:
         async with session.get(SCRYFALL_SEARCH_URL, params=params) as response:
@@ -35,12 +39,8 @@ async def scryfall_commander_lookup(cardname: str):
                 data = await response.json()
                 if data['object'] == 'list' and data['total_cards'] > 0:
                     return data['data'][0]["name"]
-                else:
-                    return "No cards found."
-            else:
-                return f"Error: {response.status}"
-
-    print(results)
+                
+    raise CommanderNotFound
 
 def get_next_increment_value():
     result = (
@@ -73,16 +73,24 @@ class TTSLeagueClient(discord.Client):
 class ReportLeagueResult(discord.ui.Modal, title="Report League Result"):
     async def on_submit(self, interaction: discord.Interaction):
         commanders = [child.value for child in self._children]
-
         full_commander_names = []
-        for commander in commanders:
-            if "," in commander:
-                parnters = [await scryfall_commander_lookup(partner.strip()) for partner in commander.split(",")]
-                full_commander_names.append("/".join(parnters))
-            else:
-                full_commander_names.append(await scryfall_commander_lookup(commander))
 
-        
+        for commander in commanders:
+            try:
+                if "," in commander or "/" in commander:
+                    partners_search = commander.replace('/', ',').split(",")
+                    partners_cards = [await scryfall_commander_lookup(partner.strip(), is_partner=True) for partner in partners_search]
+                    full_commander_names.append("/".join(partners_cards))
+                else:
+                    full_commander_names.append(await scryfall_commander_lookup(commander))
+            except CommanderNotFound:
+                await interaction.response.send_message(
+                    f"Failed to find commander {commander}", ephemeral=True
+                )
+
+                return
+ 
+
         body = {
             "values": [
                 [
@@ -92,7 +100,7 @@ class ReportLeagueResult(discord.ui.Modal, title="Report League Result"):
                     get_unique_discord_identifier(self.players[2]),
                     get_unique_discord_identifier(self.players[3]),
                     *full_commander_names,
-                    get_unique_discord_identifier(self.winner),
+                    get_unique_discord_identifier(self.winner) if self.winner else 'Draw',
                     f"=EPOCHTODATE({int(time.time())})",
                     "Empty",
                 ]
@@ -132,7 +140,7 @@ client = TTSLeagueClient()
 @client.tree.command(description="Report league results.")
 async def report(
     interaction: discord.Interaction,
-    winner: discord.Member,
+    winner: Optional[discord.Member],
     player1: discord.Member,
     player2: discord.Member,
     player3: discord.Member,
